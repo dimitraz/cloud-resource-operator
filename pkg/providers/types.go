@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"github.com/aws/aws-sdk-go/service/elasticache"
 
 	"github.com/integr8ly/cloud-resource-operator/pkg/apis/integreatly/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,9 +37,17 @@ type BlobStorageProvider interface {
 	DeleteStorage(ctx context.Context, client client.Client, bs *v1alpha1.BlobStorage) error
 }
 
+type RedisInstance struct {
+	DeploymentDetails RedisDeploymentDetails
+}
+
+type RedisDeploymentDetails interface {
+	Data() *elasticache.Endpoint
+}
+
 type RedisProvider interface {
 	GetName() string
 	SupportsStrategy(s string) bool
-	CreateRedis(ctx context.Context) error
-	DeleteRedis(ctx context.Context) error
+	CreateRedis(ctx context.Context, r *v1alpha1.Redis) (*RedisInstance, error)
+	DeleteRedis(ctx context.Context)  error
 }

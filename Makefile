@@ -29,7 +29,7 @@ cluster/prepare:
 	oc new-project $(NAMESPACE) || true
 	oc apply -f ./deploy/crds/*_crd.yaml
 	oc apply -f ./deploy/examples/
-	oc apply -f ./deploy/crds/*_cr.yaml -n $(NAMESPACE)
+	oc apply -f ./deploy/crds/*cr.yaml -n $(NAMESPACE)
 
 .PHONY: cluster/clean
 cluster/clean:

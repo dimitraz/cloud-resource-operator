@@ -28,11 +28,6 @@ spec:
         metadata:
           type: object
         spec:
-          properties:
-            tier:
-              type: string
-            type:
-              type: string
           type: object
         status:
           type: object

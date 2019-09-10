@@ -2,13 +2,12 @@ package redis
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	integreatlyv1alpha1 "github.com/integr8ly/cloud-resource-operator/pkg/apis/integreatly/v1alpha1"
 	"github.com/integr8ly/cloud-resource-operator/pkg/providers"
 	"github.com/integr8ly/cloud-resource-operator/pkg/providers/aws"
-	"github.com/integr8ly/cloud-resource-operator/pkg/providers/openshift"
-
-	integreatlyv1alpha1 "github.com/integr8ly/cloud-resource-operator/pkg/apis/integreatly/v1alpha1"
 	errorUtil "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -87,7 +86,7 @@ type ReconcileRedis struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileRedis) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	providerList := []providers.RedisProvider{aws.NewAWSRedisProvider(r.client), openshift.NewOpenShiftRedisProvider(r.client)}
+	providerList := []providers.RedisProvider{aws.NewAWSRedisProvider(r.client)}
 
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling Redis")
@@ -124,9 +123,12 @@ func (r *ReconcileRedis) Reconcile(request reconcile.Request) (reconcile.Result,
 			}
 
 			// handle creation of redis and apply any finalizers to instance required for deletion
-			if err = p.CreateRedis(ctx); err != nil {
+			redis, err := p.CreateRedis(ctx, instance)
+			if err != nil {
 				return reconcile.Result{}, err
 			}
+
+			fmt.Println(redis)
 		}
 	}
 	return reconcile.Result{Requeue: true, RequeueAfter: time.Second * 30}, nil

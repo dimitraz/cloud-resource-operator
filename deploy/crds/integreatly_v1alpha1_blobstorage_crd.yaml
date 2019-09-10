@@ -28,40 +28,8 @@ spec:
         metadata:
           type: object
         spec:
-          properties:
-            secretRef:
-              properties:
-                name:
-                  type: string
-              type: object
-            tier:
-              type: string
-            type:
-              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                Important: Run "operator-sdk generate k8s" to regenerate code after
-                modifying this file Add custom validation using kubebuilder tags:
-                https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
-              type: string
-          required:
-          - type
-          - tier
-          - secretRef
           type: object
         status:
-          properties:
-            provider:
-              type: string
-            secretRef:
-              properties:
-                name:
-                  type: string
-              type: object
-            strategy:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                code after modifying this file Add custom validation using kubebuilder
-                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
-              type: string
           type: object
   version: v1alpha1
   versions:

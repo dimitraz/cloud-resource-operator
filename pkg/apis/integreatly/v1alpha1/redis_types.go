@@ -10,11 +10,10 @@ import (
 // RedisSpec defines the desired state of Redis
 // +k8s:openapi-gen=true
 type RedisSpec struct {
-	Tier string `json:"tier,omitempty"`
-	Type string `json:"type,omitempty"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+	*ResourceTypeSpec `json:",inline"`
 }
 
 // RedisStatus defines the observed state of Redis
@@ -23,6 +22,7 @@ type RedisStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+	*ResourceTypeStatus `json:",inline"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
