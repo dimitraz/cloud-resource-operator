@@ -37,7 +37,7 @@ type BlobStorageProvider interface {
 	DeleteStorage(ctx context.Context, client client.Client, bs *v1alpha1.BlobStorage) error
 }
 
-type RedisInstance struct {
+type RedisCluster struct {
 	DeploymentDetails RedisDeploymentDetails
 }
 
@@ -48,6 +48,6 @@ type RedisDeploymentDetails interface {
 type RedisProvider interface {
 	GetName() string
 	SupportsStrategy(s string) bool
-	CreateRedis(ctx context.Context, r *v1alpha1.Redis) (*RedisInstance, error)
-	DeleteRedis(ctx context.Context)  error
+	CreateRedis(ctx context.Context, r *v1alpha1.Redis) (*RedisCluster, error)
+	DeleteRedis(ctx context.Context) error
 }

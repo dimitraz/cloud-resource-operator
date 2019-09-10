@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -11,16 +13,11 @@ import (
 	"github.com/integr8ly/cloud-resource-operator/pkg/apis/integreatly/v1alpha1"
 	"github.com/integr8ly/cloud-resource-operator/pkg/resources"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"time"
 
 	"github.com/integr8ly/cloud-resource-operator/pkg/providers"
 
 	errorUtil "github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-const (
-	dataConnectionString = "ConnectionURI"
 )
 
 // AWSRedisDeploymentDetails provider specific details about the AWS Redis Cluster created
@@ -41,7 +38,7 @@ type AWSRedisProvider struct {
 
 func NewAWSRedisProvider(client client.Client) *AWSRedisProvider {
 	return &AWSRedisProvider{
-		Client: client,
+		Client:            client,
 		CredentialManager: NewCredentialManager(client),
 		ConfigManager:     NewDefaultConfigManager(client),
 	}
@@ -55,7 +52,7 @@ func (p *AWSRedisProvider) SupportsStrategy(d string) bool {
 	return d == providers.AWSDeploymentStrategy
 }
 
-func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (*providers.RedisInstance, error) {
+func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (*providers.RedisCluster, error) {
 	// handle provider-specific finalizer
 	if r.GetDeletionTimestamp() == nil {
 		resources.AddFinalizer(&r.ObjectMeta, defaultFinalizer)
@@ -88,35 +85,42 @@ func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (
 	descInput := &elasticache.DescribeReplicationGroupsInput{}
 
 	// the aws access key can sometimes still not be registered in aws on first try, so loop
-	var existingReplication []*elasticache.ReplicationGroup
+	var rgs []*elasticache.ReplicationGroup
 	err = wait.PollImmediate(time.Second*5, time.Minute*5, func() (done bool, err error) {
 		listOutput, err := cacheSvc.DescribeReplicationGroups(descInput)
 		if err != nil {
 			return false, nil
 		}
-		existingReplication = listOutput.ReplicationGroups
+		rgs = listOutput.ReplicationGroups
 		return true, nil
 	})
 	if err != nil {
-		return nil, errorUtil.Wrapf(err, "timed out waiting to list s3 buckets")
+		return nil, errorUtil.Wrapf(err, "timed out waiting to get replication groups")
 	}
 
+	// pre-create the redis cluster that will be returned if everything is successful
+	redis := &providers.RedisCluster{
+		DeploymentDetails: &AWSRedisDeploymentDetails{
+			Connection: &elasticache.Endpoint{},
+		},
+	}
+
+	// check if the cluster has already been created
 	var foundCache *elasticache.ReplicationGroup
-	for _, c := range existingReplication {
+	for _, c := range rgs {
 		if *c.ReplicationGroupId == *redisConfig.ReplicationGroupId {
 			foundCache = c
 			break
 		}
 	}
 	if foundCache != nil {
-		fmt.Println(foundCache)
-		return &providers.RedisInstance{
-			DeploymentDetails: &AWSRedisDeploymentDetails{
-				Connection: foundCache.ConfigurationEndpoint,
-			},
-		}, nil
+		redis.DeploymentDetails = &AWSRedisDeploymentDetails{
+			Connection: foundCache.ConfigurationEndpoint,
+		}
+		return redis, nil
 	}
 
+	// if it hasn't been created, create the redis cluster
 	input := &elasticache.CreateReplicationGroupInput{
 		AutomaticFailoverEnabled:    aws.Bool(true),
 		CacheNodeType:               aws.String("cache.t2.micro"),
@@ -127,19 +131,16 @@ func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (
 		ReplicationGroupId:          aws.String(*redisConfig.ReplicationGroupId),
 		SnapshotRetentionLimit:      aws.Int64(30),
 	}
-	fmt.Println(input)
-
-	result, err := cacheSvc.CreateReplicationGroup(input)
+	rg, err := cacheSvc.CreateReplicationGroup(input)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Print(result)
 
-	return &providers.RedisInstance{
-		DeploymentDetails: &AWSRedisDeploymentDetails{
-			Connection: result.ReplicationGroup.ConfigurationEndpoint,
-		},
-	}, nil
+	// update the redis connection endpoint
+	redis.DeploymentDetails = &AWSRedisDeploymentDetails{
+		Connection: rg.ReplicationGroup.ConfigurationEndpoint,
+	}
+	return redis, nil
 }
 
 func (p *AWSRedisProvider) DeleteRedis(ctx context.Context) error {
