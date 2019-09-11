@@ -89,6 +89,7 @@ type ReconcileRedis struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileRedis) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	providerList := []providers.RedisProvider{aws.NewAWSRedisProvider(r.client)}
+
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling Redis")
 	ctx := context.TODO()
@@ -133,17 +134,14 @@ func (r *ReconcileRedis) Reconcile(request reconcile.Request) (reconcile.Result,
 				return reconcile.Result{Requeue: true, RequeueAfter: time.Second * 30}, nil
 			}
 
-			fmt.Printf("redis %s", redis)
-
 			// create the secret with the redis cluster connection details
-			reqLogger.Info("creating or updating client secret")
 			sec := &corev1.Secret{
 				ObjectMeta: controllerruntime.ObjectMeta{
-					Name: 		instance.Spec.SecretRef.Name,
-					Namespace: 	instance.Namespace,
+					Name:      instance.Spec.SecretRef.Name,
+					Namespace: instance.Namespace,
 				},
 			}
-
+			reqLogger.Info("creating or updating client secret")
 			_, err = controllerruntime.CreateOrUpdate(ctx, r.client, sec, func(existing runtime.Object) error {
 				e := existing.(*corev1.Secret)
 				if err = controllerutil.SetControllerReference(instance, e, r.scheme); err != nil {
@@ -159,11 +157,10 @@ func (r *ReconcileRedis) Reconcile(request reconcile.Request) (reconcile.Result,
 				return nil
 			})
 			if err != nil {
-				fmt.Println("error: %s", err)
 				return reconcile.Result{}, err
 			}
 
-			fmt.Println("akeating", instance.Spec.SecretRef, instance.Status)
+			// update the redis custom resource
 			instance.Status.SecretRef = instance.Spec.SecretRef
 			instance.Status.Strategy = stratMap.Redis
 			instance.Status.Provider = p.GetName()

@@ -3,6 +3,7 @@ package aws
 import (
 	"context"
 	"encoding/json"
+	"github.com/aws/aws-sdk-go/service/elasticache/elasticacheiface"
 	"github.com/sirupsen/logrus"
 	"time"
 
@@ -21,10 +22,10 @@ import (
 )
 
 const (
-	defaultCacheNodeType = "cache.t2.micro"
-	defaultEngineVersion = "2.8.24"
-	defaultDescription = "A Redis replication group"
-	defaultNumCacheClusters = 2
+	defaultCacheNodeType     = "cache.t2.micro"
+	defaultEngineVersion     = "2.8.24"
+	defaultDescription       = "A Redis replication group"
+	defaultNumCacheClusters  = 2
 	defaultSnapshotRetention = 30
 )
 
@@ -40,8 +41,8 @@ func (d *AWSRedisDeploymentDetails) Data() *elasticache.Endpoint {
 // AWS Redis Provider implementation for AWS Elasticache
 type AWSRedisProvider struct {
 	Client            client.Client
-	CredentialManager *CredentialManager
-	ConfigManager     *ConfigManager
+	CredentialManager CredentialManagerInterface
+	ConfigManager     ConfigManagerInterface
 }
 
 func NewAWSRedisProvider(client client.Client) *AWSRedisProvider {
@@ -89,21 +90,14 @@ func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (
 		Region:      aws.String(stratCfg.Region),
 		Credentials: credentials.NewStaticCredentials(providerCreds.AccessKeyID, providerCreds.SecretAccessKey, ""),
 	}))
+
+	//cacheSvc = &elasticacheiface.ElastiCacheAPI
 	cacheSvc := elasticache.New(sess)
-	descInput := &elasticache.DescribeReplicationGroupsInput{}
 
 	// the aws access key can sometimes still not be registered in aws on first try, so loop
-	var rgs []*elasticache.ReplicationGroup
-	err = wait.PollImmediate(time.Second*5, time.Minute*5, func() (done bool, err error) {
-		listOutput, err := cacheSvc.DescribeReplicationGroups(descInput)
-		if err != nil {
-			return false, nil
-		}
-		rgs = listOutput.ReplicationGroups
-		return true, nil
-	})
+	rgs, err := getRgs(cacheSvc)
 	if err != nil {
-		return nil, errorUtil.Wrapf(err, "timed out waiting to get replication groups")
+		return nil, err
 	}
 
 	// pre-create the redis cluster that will be returned if everything is successful
@@ -122,7 +116,7 @@ func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (
 		}
 	}
 	if foundCache != nil {
-		if *(foundCache.Status) == "available" {
+		if *foundCache.Status == "available" {
 			logrus.Info("found existing redis cluster")
 			redis.DeploymentDetails = &AWSRedisDeploymentDetails{
 				Connection: foundCache.NodeGroups[0].PrimaryEndpoint,
@@ -158,6 +152,23 @@ func (p *AWSRedisProvider) DeleteRedis(ctx context.Context) error {
 	return nil
 }
 
+// poll for replication groups
+func getRgs(cacheSvc elasticacheiface.ElastiCacheAPI) ([]*elasticache.ReplicationGroup, error) {
+	var rgs []*elasticache.ReplicationGroup
+	err := wait.PollImmediate(time.Second*5, time.Minute*5, func() (done bool, err error) {
+		listOutput, err := cacheSvc.DescribeReplicationGroups(&elasticache.DescribeReplicationGroupsInput{})
+		if err != nil {
+			return false, nil
+		}
+		rgs = listOutput.ReplicationGroups
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rgs, nil
+}
+
 // getRedisConfig retrieves the redis config from the cloud-resources-aws-strategies configmap
 func (p *AWSRedisProvider) getRedisConfig(ctx context.Context, r *v1alpha1.Redis) (*elasticache.CreateReplicationGroupInput, *StrategyConfig, error) {
 	stratCfg, err := p.ConfigManager.ReadStorageStrategy(ctx, providers.RedisResourceType, r.Spec.Tier)
@@ -177,7 +188,7 @@ func (p *AWSRedisProvider) getRedisConfig(ctx context.Context, r *v1alpha1.Redis
 }
 
 // verifyRedisConfig checks redis config, if none exist sets values to default
-func verifyRedisConfig(redisConfig *elasticache.CreateReplicationGroupInput){
+func verifyRedisConfig(redisConfig *elasticache.CreateReplicationGroupInput) {
 	if redisConfig.CacheNodeType == nil {
 		redisConfig.CacheNodeType = aws.String(defaultCacheNodeType)
 	}
