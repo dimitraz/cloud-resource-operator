@@ -104,13 +104,15 @@ func (r *ReconcileBlobStorage) Reconcile(request reconcile.Request) (reconcile.R
 				return reconcile.Result{}, nil
 			}
 
-			bsi, err := p.CreateStorage(ctx, r.client, instance)
+			bsi, err := p.CreateStorage(ctx, instance)
 			if err != nil {
 				return reconcile.Result{}, err
 			}
 			if bsi == nil {
 				return reconcile.Result{}, errorUtil.New("secret data is still reconciling")
 			}
+
+			// create the secret with user aws credentials
 			sec := &corev1.Secret{
 				ObjectMeta: controllerruntime.ObjectMeta{
 					Name:      instance.Spec.SecretRef.Name,

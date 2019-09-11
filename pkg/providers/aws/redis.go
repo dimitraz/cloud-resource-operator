@@ -3,7 +3,7 @@ package aws
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,6 +18,14 @@ import (
 
 	errorUtil "github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	defaultCacheNodeType = "cache.t2.micro"
+	defaultEngineVersion = "2.8.24"
+	defaultDescription = "A Redis replication group"
+	defaultNumCacheClusters = 2
+	defaultSnapshotRetention = 30
 )
 
 // AWSRedisDeploymentDetails provider specific details about the AWS Redis Cluster created
@@ -67,7 +75,7 @@ func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (
 		return nil, errorUtil.Wrapf(err, "failed to retrieve aws redis cluster config for instance %s", r.Name)
 	}
 	if redisConfig.ReplicationGroupId == nil {
-		redisConfig.ReplicationGroupId = aws.String(fmt.Sprintf("%s-%s", r.Namespace, r.Name))
+		redisConfig.ReplicationGroupId = aws.String(r.Name)
 	}
 
 	// create the credentials to be used by the aws resource providers, not to be used by end-user
@@ -114,39 +122,43 @@ func (p *AWSRedisProvider) CreateRedis(ctx context.Context, r *v1alpha1.Redis) (
 		}
 	}
 	if foundCache != nil {
-		redis.DeploymentDetails = &AWSRedisDeploymentDetails{
-			Connection: foundCache.ConfigurationEndpoint,
+		if *(foundCache.Status) == "available" {
+			logrus.Info("found existing redis cluster")
+			redis.DeploymentDetails = &AWSRedisDeploymentDetails{
+				Connection: foundCache.NodeGroups[0].PrimaryEndpoint,
+			}
+			return redis, nil
 		}
-		return redis, nil
+		return nil, nil
 	}
 
-	// if it hasn't been created, create the redis cluster
+	// the cluster doesn't exist, so create it
+	// verify that all values are set or use defaults
+	logrus.Info("creating redis cluster")
+	verifyRedisConfig(redisConfig)
 	input := &elasticache.CreateReplicationGroupInput{
 		AutomaticFailoverEnabled:    aws.Bool(true),
-		CacheNodeType:               aws.String("cache.t2.micro"),
 		Engine:                      aws.String("redis"),
-		EngineVersion:               aws.String("2.8.24"),
-		NumCacheClusters:            aws.Int64(3),
-		ReplicationGroupDescription: aws.String("A Redis replication group."),
-		ReplicationGroupId:          aws.String(*redisConfig.ReplicationGroupId),
-		SnapshotRetentionLimit:      aws.Int64(30),
+		ReplicationGroupId:          redisConfig.ReplicationGroupId,
+		CacheNodeType:               redisConfig.CacheNodeType,
+		EngineVersion:               redisConfig.EngineVersion,
+		ReplicationGroupDescription: redisConfig.ReplicationGroupDescription,
+		NumCacheClusters:            redisConfig.NumCacheClusters,
+		SnapshotRetentionLimit:      redisConfig.SnapshotRetentionLimit,
 	}
-	rg, err := cacheSvc.CreateReplicationGroup(input)
+	_, err = cacheSvc.CreateReplicationGroup(input)
 	if err != nil {
 		return nil, err
 	}
 
-	// update the redis connection endpoint
-	redis.DeploymentDetails = &AWSRedisDeploymentDetails{
-		Connection: rg.ReplicationGroup.ConfigurationEndpoint,
-	}
-	return redis, nil
+	return nil, nil
 }
 
 func (p *AWSRedisProvider) DeleteRedis(ctx context.Context) error {
 	return nil
 }
 
+// getRedisConfig retrieves the redis config from the cloud-resources-aws-strategies configmap
 func (p *AWSRedisProvider) getRedisConfig(ctx context.Context, r *v1alpha1.Redis) (*elasticache.CreateReplicationGroupInput, *StrategyConfig, error) {
 	stratCfg, err := p.ConfigManager.ReadStorageStrategy(ctx, providers.RedisResourceType, r.Spec.Tier)
 	if err != nil {
@@ -162,4 +174,23 @@ func (p *AWSRedisProvider) getRedisConfig(ctx context.Context, r *v1alpha1.Redis
 		return nil, nil, errorUtil.Wrap(err, "failed to unmarshal aws redis cluster configuration")
 	}
 	return redisConfig, stratCfg, nil
+}
+
+// verifyRedisConfig checks redis config, if none exist sets values to default
+func verifyRedisConfig(redisConfig *elasticache.CreateReplicationGroupInput){
+	if redisConfig.CacheNodeType == nil {
+		redisConfig.CacheNodeType = aws.String(defaultCacheNodeType)
+	}
+	if redisConfig.ReplicationGroupDescription == nil {
+		redisConfig.ReplicationGroupDescription = aws.String(defaultDescription)
+	}
+	if redisConfig.EngineVersion == nil {
+		redisConfig.EngineVersion = aws.String(defaultEngineVersion)
+	}
+	if redisConfig.NumCacheClusters == nil {
+		redisConfig.NumCacheClusters = aws.Int64(defaultNumCacheClusters)
+	}
+	if redisConfig.SnapshotRetentionLimit == nil {
+		redisConfig.SnapshotRetentionLimit = aws.Int64(defaultSnapshotRetention)
+	}
 }

@@ -33,7 +33,7 @@ type BlobStorageDeploymentDetails interface {
 type BlobStorageProvider interface {
 	GetName() string
 	SupportsStrategy(s string) bool
-	CreateStorage(ctx context.Context, client client.Client, bs *v1alpha1.BlobStorage) (*BlobStorageInstance, error)
+	CreateStorage(ctx context.Context, bs *v1alpha1.BlobStorage) (*BlobStorageInstance, error)
 	DeleteStorage(ctx context.Context, client client.Client, bs *v1alpha1.BlobStorage) error
 }
 

@@ -40,6 +40,7 @@ var (
 				"s3:GetObject",
 				"elasticache:CreateReplicationGroup",
 				"elasticache:DeleteReplicationGroup",
+				"elasticache:DescribeReplicationGroups",
 			},
 			Resource: "*",
 		},

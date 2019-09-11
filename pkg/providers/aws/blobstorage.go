@@ -77,11 +77,11 @@ func (p *AWSBlobStorageProvider) SupportsStrategy(d string) bool {
 }
 
 // CreateStorage Create S3 bucket from strategy config and credentials to interact with it
-func (p *AWSBlobStorageProvider) CreateStorage(ctx context.Context, client client.Client, bs *v1alpha1.BlobStorage) (*providers.BlobStorageInstance, error) {
+func (p *AWSBlobStorageProvider) CreateStorage(ctx context.Context, bs *v1alpha1.BlobStorage) (*providers.BlobStorageInstance, error) {
 	// handle provider-specific finalizer
 	if bs.GetDeletionTimestamp() == nil {
 		resources.AddFinalizer(&bs.ObjectMeta, defaultFinalizer)
-		if err := client.Update(ctx, bs); err != nil {
+		if err := p.Client.Update(ctx, bs); err != nil {
 			return nil, errorUtil.Wrapf(err, "failed to add finalizer to instance")
 		}
 	}

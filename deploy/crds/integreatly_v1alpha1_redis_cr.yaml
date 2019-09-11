@@ -1,7 +1,8 @@
 apiVersion: integreatly.org/v1alpha1
 kind: Redis
 metadata:
-  name: example-redis
+  # name must be between 1-40 characters
+  name: redis-croche
 spec:
   # i want my redis storage information output in a Secret named test in the Namespace cloud-resource-operator
   secretRef:

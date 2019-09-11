@@ -14,5 +14,5 @@ type ResourceTypeSpec struct {
 type ResourceTypeStatus struct {
 	Strategy  string    `json:"strategy,omitempty"`
 	Provider  string    `json:"provider,omitempty"`
-	SecretRef SecretRef `json:"secretRef,omitempty"`
+	SecretRef SecretRef `json:"secretRef"`
 }
