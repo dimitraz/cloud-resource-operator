@@ -28,8 +28,8 @@ var (
 func buildTestPostgresCR() *v1alpha1.Postgres {
 	return &v1alpha1.Postgres{
 		ObjectMeta: controllerruntime.ObjectMeta{
-			Name:      testPostgresNamespace,
-			Namespace: testRedisNamespace,
+			Name:      testPostgresName,
+			Namespace: testPostgresNamespace,
 		},
 		Spec:   v1alpha1.PostgresSpec{},
 		Status: v1alpha1.PostgresStatus{},
@@ -230,12 +230,12 @@ func TestOpenShiftPostgresProvider_overrideDefaults(t *testing.T) {
 			switch tt.want.(type) {
 			case *v1.PersistentVolumeClaimSpec:
 				got := &v1.PersistentVolumeClaim{}
-				err = tt.fields.Client.Get(tt.args.ctx, types.NamespacedName{Name: testPostgresName, Namespace: testPostgresNamespace}, got)
+				err = tt.fields.Client.Get(tt.args.ctx, types.NamespacedName{Name: "postgresql-data", Namespace: testPostgresNamespace}, got)
 				if (err != nil) != tt.wantErr {
 					t.Errorf("overrideDefaults() error = %v, wantErr %v", err, tt.wantErr)
 					return
 				}
-				if !reflect.DeepEqual(got.Spec, tt.want) {
+				if !reflect.DeepEqual(&got.Spec, tt.want) {
 					t.Errorf("overrideDefaults() \ngot = %+v, \nwant %+v", got.Spec, tt.want)
 				}
 			}
